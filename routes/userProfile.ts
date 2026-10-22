@@ -55,13 +55,13 @@ export function getUserProfile () {
       req.app.locals.abused_ssti_bug = true
       const code = username?.substring(2, username.length - 1)
       try {
-        if (!code) {
-          throw new Error('Username is null')
+        if (!code || code.includes('#{') || code.includes('!{')) {
+          throw new Error('Username is null or contains invalid template interpolation')
         }
-        const singleQuoteRegex = /^'(?:[^'\\]|\\.)*'$/
-        const doubleQuoteRegex = /^"(?:[^"\\]|\\.)*"$/
-        const backtickRegex = /^`(?:[^`\\$]|\\.|\$(?!{))*`$/
-        const numericRegex = /^-?\d+(?:\.\d+)?$/
+        const singleQuoteRegex = /^'(?:[^'\\#!]|\\.|#(?!{)|!(?!{))*'$/
+        const doubleQuoteRegex = /^"(?:[^"\\#!]|\\.|#(?!{)|!(?!{))*"$/
+        const backtickRegex = /^`(?:[^`\\$#!]|\\.|(?!\${)|#(?!{)|!(?!{))*`$/
+        const numericRegex = /^[0-9+*/%().\s-]+$/
         const booleanRegex = /^(?:true|false|null|undefined)$/
 
         const isSafe = singleQuoteRegex.test(code) ||
@@ -73,7 +73,12 @@ export function getUserProfile () {
         if (!isSafe) {
           throw new Error('Unsafe code execution blocked')
         }
-        username = eval(code) // eslint-disable-line no-eval
+        const evaluated = eval(code) // eslint-disable-line no-eval
+        const evaluatedStr = String(evaluated)
+        if (evaluatedStr.includes('#{') || evaluatedStr.includes('!{')) {
+          throw new Error('Unsafe code execution blocked')
+        }
+        username = evaluatedStr
       } catch (err) {
         username = '\\' + username
       }
